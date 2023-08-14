@@ -13,3 +13,23 @@ logging.basicConfig(
     level=logging.DEBUG,
     filename=log_file_path,
 )
+
+
+def load_config(path: str) -> dict:
+    """Load config from yaml file
+
+    Args:
+        path (str): path to yaml file
+
+    Returns:
+        dict: dictionary of config
+    """
+    try:
+        logging.info(f"Loading config from {path}")
+        config = yaml.load(open(path, "r"), Loader=yaml.FullLoader)
+        logging.info(f"Loaded config: {config}")
+    except Exception as e:
+        logging.error(f"Error loading config at path {path}: {e}")
+        exit(1)
+
+    return config
