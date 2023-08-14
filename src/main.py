@@ -144,3 +144,36 @@ def get_batches(
     y = torch.stack([batch_data[i + 1 : i + context_window + 1] for i in ix]).long()
 
     return x, y
+
+
+def main():
+    # load config
+    config = load_config(path="./conf/config.yaml")
+
+    # load data
+    ind_to_char, char_to_ind, vocab, lines = load_data(path=config["data_file_path"])
+    config["vocab_size"] = len(vocab)
+
+    # encode data and create torch data set
+    dataset = torch.tensor(encode(s=lines, char_ind_map=char_to_ind), dtype=torch.int8)
+    logging.info(f"Encoded data shape: {dataset.shape}")
+
+    # get batches
+    X, Y = get_batches(
+        data=dataset,
+        context_window=config["context_window"],
+        split="train",
+        train_size=config["train_size"],
+        batch_size=config["batch_size"],
+    )
+
+    print(
+        [
+            (decode(X[i].tolist(), ind_to_char), decode(Y[i].tolist(), ind_to_char))
+            for i in range(len(X))
+        ]
+    )
+
+
+if __name__ == "__main__":
+    main()
