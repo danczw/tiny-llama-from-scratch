@@ -8,6 +8,11 @@ license = "Apache License 2.0"
 [[tool.poetry.source]]
 name = "torch_cpu"
 url = "https://download.pytorch.org/whl/cpu"
+priority = "supplemental"
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "primary"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -15,8 +20,7 @@ polars = "^0.18.13"
 numpy = "^1.25.2"
 matplotlib = "^3.7.2"
 PyYAML = "^6.0.1"
-# torch = {version = "^2.0.1", source = "torch_cpu"}
-torch = "2.0.1+cpu"
+torch = {version = "^2.0.1", source = "torch_cpu"}
 
 [tool.poetry.dev-dependencies]
 ruff = "^0.0.284"

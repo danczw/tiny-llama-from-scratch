@@ -18,17 +18,14 @@ All configurations are located at `conf/config.yml`. The default configuration i
 
 ## Install dependencies
 
-Currently, there is a documented issue with installing `pytorch` via poetry: [Instructions for installing PyTorch #6409 - python-poetry/poetry (github.com)](https://github.com/python-poetry/poetry/issues/6409). Therefore, we recommend to install `pytorch` first via:
-
-```bash
-poetry add torch --source torch_cpu
-```
-
-Then, install the remaining dependencies via:
+Install dependencies via:
 
 ```bash
 poetry install
 ```
+
+Note:
+Currently, there is a documented issue with installing `pytorch` via poetry: [Instructions for installing PyTorch #6409 - python-poetry/poetry (github.com)](https://github.com/python-poetry/poetry/issues/6409), forcing installation for specific PyTorch features (e.g., CPU only version) to resolve dependencies using the wheel URL, which takes up to several minutes.
 
 ## Run
 
