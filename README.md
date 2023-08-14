@@ -1,10 +1,22 @@
 <h1 align="center">Tiny LLaMa from Scratch</h1>
 
 <div align="center">
-Tiny <a href="https://arxiv.org/pdf/2302.13971.pdf">LLaMa</a> LLM implemented from scratch using PyTorch and Polars.
+Tiny LLaMa LLM implemented from scratch using PyTorch and Polars.
+
+<br>
+
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 </div>
 
-Based on and adapted from Brian Kitanos' [Llama from scratch (or how to implement a paper without crying)](https://blog.briankitano.com/llama-from-scratch/)
+<br>
+
+----
+
+<br>
+
+This repository contains a minimal implementation of the [LLaMa](https://arxiv.org/pdf/2302.13971.pdf) language model. It is implemented using PyTorch and Polars and trained on the TinyShakespear dataset. The repo is intended as a minimal example for a LLaMa implementation for educational purposes.
+
+Based, adapted and extended on Brian Kitanos' `Llama from scratch (or how to implement a paper without crying)` ([Blog Version](https://blog.briankitano.com/llama-from-scratch/) | [GitHub Version](https://github.com/bkitano/llama-from-scratch)).
 
 <br>
 
@@ -34,3 +46,5 @@ Run tiny LLaMa training cycle via:
 ```bash
 poetry run python main.py
 ```
+
+Logs are written to `log/`, while loss visualizations are written to `data/loss.png`.
