@@ -146,6 +146,40 @@ def get_batches(
     return x, y
 
 
+@torch.no_grad()
+def evaluate_loss(model: torch.nn.Module, dataset: torch.tensor, config: dict) -> dict:
+    """Evaluate loss on train and test set
+
+    Args:
+        model (torch.nn.Module): model to evaluate
+        dataset (torch.tensor): dataset tensor of encoded data
+        config (dict): config dictionary
+
+    Returns:
+        dict:
+    """
+    output = {}
+    model.eval()
+
+    for split in ["train", "test"]:
+        losses = []
+        for _ in range(10):
+            xb, yb = get_batches(
+                data=dataset,
+                context_window=config["context_window"],
+                split=split,
+                train_size=config["train_size"],
+                batch_size=config["batch_size"],
+            )
+            _, loss = model(xb, yb)
+            losses.append(loss.item())
+        output[split] = np.mean(losses)
+
+    model.train()
+
+    return output
+
+
 def main():
     # load config
     config = load_config(path="./conf/config.yaml")
@@ -165,13 +199,6 @@ def main():
         split="train",
         train_size=config["train_size"],
         batch_size=config["batch_size"],
-    )
-
-    print(
-        [
-            (decode(X[i].tolist(), ind_to_char), decode(Y[i].tolist(), ind_to_char))
-            for i in range(len(X))
-        ]
     )
 
 
