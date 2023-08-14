@@ -315,6 +315,27 @@ def main():
         batch_size=config["batch_size"],
     )
 
+    # create model and optimizer
+    model = SimpleModel(config=config)
+    optimizer = torch.optim.Adam(model.parameters())
+
+    # train model
+    loss_df = train(
+        model=model,
+        optimizer=optimizer,
+        dataset=dataset,
+        config=config,
+        scheduler=None,
+    )
+
+    # plot train and val loss
+    pl.plot(loss_df["train"], label="train")
+    pl.plot(loss_df["val"], label="val")
+    pl.ylabel("Loss")
+    pl.title("Train and Val Loss")
+    pl.legend()
+    pl.savefig(config["output_path"] + "/loss.png")
+
 
 if __name__ == "__main__":
     main()
