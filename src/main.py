@@ -6,14 +6,20 @@ import numpy as np
 import polars as ps
 import torch
 import yaml
+from torch import nn
+from torch.nn import functional as F
 
 # setup logging
 log_file_path = "./log/tiny.log"
-logging.basicConfig(
-    format="%(asctime)s - %(name)s: %(message)s",
-    level=logging.DEBUG,
-    filename=log_file_path,
-)
+formatter = logging.Formatter("%(asctime)s - %(name)s: %(message)s")
+logger = logging.getLogger("tinyLLaMa")
+logger.setLevel(logging.DEBUG)
+
+fh = logging.FileHandler(log_file_path, mode="w")
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(formatter)
+
+logger.addHandler(fh)
 
 
 def load_config(path: str) -> dict:
@@ -26,11 +32,11 @@ def load_config(path: str) -> dict:
         dict: dictionary of config
     """
     try:
-        logging.info(f"Loading config from {path}")
+        logger.info(f"Loading config from {path}")
         config = yaml.load(open(path, "r"), Loader=yaml.FullLoader)
-        logging.info(f"Loaded config: {config}")
+        logger.info(f"Loaded config: {config}")
     except Exception as e:
-        logging.error(f"Error loading config at path {path}: {e}")
+        logger.error(f"Error loading config at path {path}: {e}")
         exit(1)
 
     return config
@@ -50,16 +56,16 @@ def load_data(path: str) -> tuple:
             with lines: string of all characters
     """
     try:
-        logging.info(f"Loading data from {path}")
+        logger.info(f"Loading data from {path}")
 
         lines = open(path, "r").read()
-        logging.info(f"Loaded {len(lines)} characters")
+        logger.info(f"Loaded {len(lines)} characters")
 
         vocab = sorted(list(set(lines)))
-        logging.info(f"Loaded {len(vocab)} unique characters")
+        logger.info(f"Loaded {len(vocab)} unique characters")
 
     except Exception as e:
-        logging.error(f"Error loading data at path {path}: {e}")
+        logger.error(f"Error loading data at path {path}: {e}")
         exit(1)
 
     # create a mapping of unique chars to integers
@@ -105,7 +111,7 @@ def get_batches(
     """Get batches of data
 
     Args:
-        data (torch.tensor): torch tensor of encoded data
+        data (torch.Tensor): torch tensor of encoded data
         split (str): split type (train, val, test)
         context_window (int): context window size
         train_size (float, optional): train size. Defaults to 0.8.
@@ -117,17 +123,12 @@ def get_batches(
     # define validation and test size in percentage
     data_size = len(data)
     val_size = (1 - train_size) / 2
-    test_size = 1 - train_size - val_size
+    test_size = val_size
 
     # split data into train, val, test
     train = data[: int(data_size * train_size)]
     val = data[int(data_size * train_size) : int(data_size * (train_size + val_size))]
-    test = data[int(data_size * (train_size + val_size)) :]
-
-    logging.debug(f"Data size: {data_size}")
-    logging.debug(f"Train size: {train_size}% - {int(data_size * train_size)}")
-    logging.debug(f"Val size: {val_size}% - {int(data_size * val_size)}")
-    logging.debug(f"Test size: {test_size}% - {int(data_size * test_size)}")
+    test = data[int(data_size * (train_size + test_size)) :]
 
     # set batch data
     batch_data = train
@@ -145,12 +146,12 @@ def get_batches(
 
 
 @torch.no_grad()
-def evaluate_loss(model: torch.nn.Module, dataset: torch.Tensor, config: dict) -> dict:
+def evaluate_loss(model: nn.Module, dataset: torch.Tensor, config: dict) -> dict:
     """Evaluate loss on train and test set
 
     Args:
         model (torch.nn.Module): model to evaluate
-        dataset (torch.tensor): dataset tensor of encoded data
+        dataset (torch.Tensor): dataset tensor of encoded data
         config (dict): config dictionary
 
     Returns:
@@ -203,7 +204,7 @@ def train(
         ps.DataFrame: dataframe of losses for each epoch
     """
     losses = []
-    logging.info(f"Start training for {config['epochs']} epochs")
+    logger.info(f"Start training for {config['epochs']} epochs")
 
     for epoch in range(config["epochs"]):
         start_time = time.time()
@@ -223,14 +224,16 @@ def train(
         # forward pass
         logits, loss = model(xs, ys)
         # backward pass
-        loss.backwards()
+        loss.backward()
         # update parameters
         optimizer.step()
 
+        # update learning rate
         if scheduler:
             scheduler.step()
 
-        if epoch % config["log_interval"] == 0:
+        # log batch metrics
+        if epoch % config["log_interval"] == 0 or epoch == config["epochs"] - 1:
             batch_time = time.time() - start_time
             x = evaluate_loss(model=model, dataset=dataset, config=config)
             losses += [x]
@@ -239,13 +242,13 @@ def train(
             val_log = f"val loss {x['val']:.3f}"
             time_log = f"time {batch_time:.3f}"
             eta_log = f"ETA {batch_time * (config['epochs'] - epoch):.3f}"
-            logging.info(" | ".join([epoch_log, val_log, time_log, eta_log]))
+            logger.info(" | ".join([epoch_log, val_log, time_log, eta_log]))
 
             if scheduler:
-                logging.info(f"Learning rate: {scheduler.get_lr()}")
+                logger.info(f"Learning rate: {scheduler.get_lr()}")
 
-    logging.info(f"Training completed for {config['epochs']} epochs")
-    logging.info(f"Final loss: {losses[-1]}")
+    logger.info(f"Training completed for {config['epochs']} epochs")
+    logger.info(f"Final loss: {losses[-1]}")
 
     return ps.DataFrame(losses)
 
@@ -260,7 +263,7 @@ def main():
 
     # encode data and create torch data set
     dataset = torch.tensor(encode(s=lines, char_ind_map=char_to_ind), dtype=torch.int8)
-    logging.info(f"Encoded data shape: {dataset.shape}")
+    logger.info(f"Encoded data shape: {dataset.shape}")
 
     # get batches
     X, Y = get_batches(
