@@ -161,7 +161,7 @@ def evaluate_loss(model: nn.Module, dataset: torch.Tensor, config: dict) -> dict
     model.eval()
 
     # evaluate loss on train and test set
-    for split in ["train", "test"]:
+    for split in ["train", "val"]:
         losses = []
         for _ in range(10):
             # get batches and calculate loss for each batch
@@ -177,15 +177,56 @@ def evaluate_loss(model: nn.Module, dataset: torch.Tensor, config: dict) -> dict
         # calculate mean loss across batches
         output[split] = np.mean(losses)
 
-    logging.debug(f"Loss on train set: {output['train']}")
-    logging.debug(f"Loss on test set: {output['test']}")
+    logger.debug(f"Loss on train set: {output['train']:.3f}")
+    logger.debug(f"Loss on test set: {output['val']:.3f}")
 
     model.train()
     return output
 
 
+class SimpleModel(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+
+        # number of embeddings based on vocab size
+        self.embedding = nn.Embedding(config["vocab_size"], config["d_model"])
+        # simple Model: linear layer with relu activation
+        self.linear = nn.Sequential(
+            nn.Linear(config["d_model"], config["d_model"]),
+            nn.ReLU(),
+            nn.Linear(config["d_model"], config["vocab_size"]),
+        )
+
+        logger.info(f"model params: {sum([m.numel() for m in self.parameters()])}")
+
+    def forward(self, idx: int, targets: torch.Tensor = None) -> tuple:  # type: ignore
+        """Forward pass of model
+
+        Args:
+            idx (int): index of input
+            targets (torch.Tensor, optional): target tensor. Defaults to None.
+
+        Returns:
+            tuple: tuple of (logits, loss) if targets is not None else tuple of logits
+        """
+        # get embeddings and pass through linear layer
+        x = self.embedding(idx)
+        logits = self.linear(x)
+
+        # calculate loss if targets is not None
+        if targets is not None:
+            loss = F.cross_entropy(
+                logits.view(-1, self.config["vocab_size"]), targets.view(-1)
+            )
+            return logits, loss
+
+        else:
+            return logits
+
+
 def train(
-    model: torch.nn.Module,
+    model: nn.Module,
     optimizer: torch.optim.Optimizer,
     dataset: torch.Tensor,
     config: dict,

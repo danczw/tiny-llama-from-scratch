@@ -1,5 +1,9 @@
 data_file_path: ./data/input.txt
+output_path: ./data/
 
-train_size: 0.8
-batch_size: 32
-context_window: 16
+train_size: 0.8 # train data size, evale and test size will be (1 - train_size) / 2 each
+batch_size: 32 # batch size
+context_window: 16 # context window size
+epochs: 1000 # number of epochs to train
+log_interval: 10 # interval to log training stats
+d_model: 128 # model dimension
