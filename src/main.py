@@ -66,3 +66,29 @@ def load_data(path: str) -> tuple:
     char_to_ind = {ch: i for i, ch in enumerate(vocab)}
 
     return ind_to_char, char_to_ind, vocab, lines
+
+
+def encode(s: str, char_ind_map: dict) -> list:
+    """simple encoding function using characters and index mapping
+
+    Args:
+        s (str): string to encode
+        char_ind_map (dict): character to index mapping
+
+    Returns:
+        list: list of encoded characters
+    """
+    return [char_ind_map[c] for c in s]
+
+
+def decode(ind_list: list, ind_char_map: dict) -> str:
+    """simple decoding function using index and character mapping
+
+    Args:
+        l (list): list of encoded characters
+        ind_char_map (dict): index to character mapping
+
+    Returns:
+        str: decoded string
+    """
+    return "".join([ind_char_map[i] for i in ind_list])
