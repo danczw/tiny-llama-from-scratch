@@ -92,3 +92,55 @@ def decode(ind_list: list, ind_char_map: dict) -> str:
         str: decoded string
     """
     return "".join([ind_char_map[i] for i in ind_list])
+
+
+def get_batches(
+    data: torch.tensor,
+    context_window: int,
+    split: str = "train",
+    train_size: float = 0.8,
+    batch_size: int = 32,
+) -> tuple:
+    """Get batches of data
+
+    Args:
+        data (torch.tensor): torch tensor of encoded data
+        split (str): split type (train, val, test)
+        context_window (int): context window size
+        train_size (float, optional): train size. Defaults to 0.8.
+        batch_size (int, optional): batch size. Defaults to 32.
+
+    Returns:
+        tuple: tuple of (x, y) where x is the input and y is the target
+    """
+    # define validation and test size in percentage
+    val_size = (1 - train_size) / 2
+    test_size = 1 - train_size - val_size
+    data_size = len(data)
+
+    logging.info(f"Train size: {train_size}% - {int(data_size * train_size)}")
+    logging.info(f"Val size: {val_size}% - {int(data_size * val_size)}")
+    logging.info(f"Test size: {test_size}% - {int(data_size * test_size)}")
+    logging.info(f"Data size: {data_size}")
+
+    # split data into train, val, test
+    train = data[: int(data_size * train_size)]
+    val = data[int(data_size * train_size) : int(data_size * (train_size + val_size))]
+    test = data[int(data_size * (train_size + val_size)) :]
+
+    logging.info(f"Actual train size: {train.shape}")
+    logging.info(f"Actual val size: {val.shape}")
+    logging.info(f"Actual test size: {test.shape}")
+
+    batch_data = train
+    if split == "val":
+        batch_data = val
+    elif split == "test":
+        batch_data = test
+
+    # pick random starting point
+    ix = torch.randint(0, batch_data.size(0) - context_window - 1, (batch_size,))
+    x = torch.stack([batch_data[i : i + context_window] for i in ix]).long()
+    y = torch.stack([batch_data[i + 1 : i + context_window + 1] for i in ix]).long()
+
+    return x, y
