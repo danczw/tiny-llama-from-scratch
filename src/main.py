@@ -294,6 +294,39 @@ def train(
     return ps.DataFrame(losses)
 
 
+def generate(
+    model: nn.Module, config: dict, ind_char_map: dict, max_new_tokens: int = 50
+) -> list:
+    """Generate new text
+
+    Args:
+        model (nn.Module): model to generate text
+        config (dict): config dictionary
+        ind_char_map (dict): index to character mapping
+        max_new_tokens (int, optional): max number of new tokens to generate. Defaults to 50.
+
+    Returns:
+        list: list of generated text
+    """
+    idx = torch.zeros(5, 1).long()
+    for _ in range(max_new_tokens):
+        # call the model
+        logits = model(idx[:, -config["context_window"] :])
+
+        # get all the batches (1), last time step, all the logits
+        last_time_step_logits = logits[:, -1, :]
+
+        # softmax to get probabilities
+        p = F.softmax(last_time_step_logits, dim=-1)
+
+        # sample from the distribution to get next token
+        idx_next = torch.multinomial(p, num_samples=1)
+
+        # append the new token to the sequence
+        idx = torch.cat((idx, idx_next), dim=-1)
+    return [decode(x, ind_char_map) for x in idx.tolist()]
+
+
 def main():
     # load config
     config = load_config(path="./conf/config.yaml")
@@ -335,6 +368,13 @@ def main():
     pl.title("Train and Val Loss")
     pl.legend()
     pl.savefig(config["output_path"] + "/loss.png")
+
+    generated_text = generate(
+        model=model,
+        config=config,
+        ind_char_map=ind_to_char,
+    )
+    logger.info(f"Generated text: {generated_text}")
 
 
 if __name__ == "__main__":
