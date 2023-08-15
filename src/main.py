@@ -1,5 +1,6 @@
 import logging
 import time
+from collections import OrderedDict
 
 import matplotlib.pyplot as pl
 import numpy as np
@@ -313,26 +314,62 @@ class SwiGLU(nn.Module):
         return out
 
 
-class TinyModel(nn.Module):
+class LlamaBlock(nn.Module):
+    def __init__(self, config: dict):
+        super().__init__()
+
+        # RMS normalization
+        self.rms = RMSNorm((config["context_window"], config["d_model"]))
+        # RoPE attention
+        self.attention = RoPEAttention_wMask(config)
+        # feed forward layer
+        self.feedforward = nn.Sequential(
+            nn.Linear(config["d_model"], config["d_model"]),
+            SwiGLU(config["d_model"]),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass of LlamaBlock
+
+        Args:
+            x (torch.Tensor): input tensor
+
+        Returns:
+            torch.Tensor: output tensor
+        """
+        # first forward pass through attention
+        x = self.rms(x)  # rms pre-normalization
+        x = x + self.attention(x)
+
+        # second forward pass through feedforward layer
+        x = self.rms(x)  # rms pre-normalization
+        x = x + self.feedforward(x)
+        return x
+
+
+class TinyLlama(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
 
         # embedding layer
         self.embedding = nn.Embedding(config["vocab_size"], config["d_model"])
-        # RMS normalization
-        self.rms = RMSNorm((config["context_window"], config["d_model"]))
-        # RoPE attention
-        self.rope_attention = RoPEAttention_wMask(config)
-
-        # linear layer with swiglu activation
-        self.linear = nn.Sequential(
-            nn.Linear(config["d_model"], config["d_model"]),
-            SwiGLU(config["d_model"]),
+        # forward pass blocks with RMS normalization, RoPE attention and feedforward layer
+        self.llama_blocks = nn.Sequential(
+            OrderedDict(
+                [
+                    (f"llama_{i}", LlamaBlock(config))
+                    for i in range(config["num_layers"])
+                ]
+            )
         )
 
-        # simple linear layer as last layer
-        self.last_linear = nn.Linear(config["d_model"], config["vocab_size"])
+        # linear layer with swiglu activation
+        self.ffn = nn.Sequential(
+            nn.Linear(config["d_model"], config["d_model"]),
+            SwiGLU(config["d_model"]),
+            nn.Linear(config["d_model"], config["vocab_size"]),
+        )
 
         logger.info(f"model params: {sum([m.numel() for m in self.parameters()])}")
 
@@ -348,16 +385,10 @@ class TinyModel(nn.Module):
         """
         # get embeddings
         x = self.embedding(idx)
-
-        # one block of attention
-        x = self.rms(x)  # rms pre-normalization
-        x = x + self.rope_attention(x)
-
-        x = self.rms(x)  # rms pre-normalization
-        x = x + self.linear(x)
-
-        # get logits
-        logits = self.last_linear(x)
+        # pass through llama blocks
+        x = self.llama_blocks(x)
+        # pass through sequential layer to get logits
+        logits = self.ffn(x)
 
         # calculate loss if targets is not None
         if targets is not None:
@@ -494,7 +525,7 @@ def main():
     )
 
     # create model and optimizer
-    model = TinyModel(config=config)
+    model = TinyLlama(config=config)
     optimizer = torch.optim.Adam(model.parameters())
 
     # train model
