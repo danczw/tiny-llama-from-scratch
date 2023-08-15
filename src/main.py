@@ -268,7 +268,7 @@ class RoPEAttention_wMask(nn.Module):
         v_out = (torch.bmm(v.transpose(0, 1), self.R[:m, ...])).transpose(0, 1)
 
         # pass through multihead attention to get attention weights and activations
-        activation, attn_weights = self.multihead(
+        activation, _attn_weights = self.multihead(
             q_out,
             k_out,
             v_out,
@@ -277,6 +277,40 @@ class RoPEAttention_wMask(nn.Module):
         )
 
         return activation
+
+
+class SwiGLU(nn.Module):
+    """
+    Swish-Gated Linear Unit
+    https://arxiv.org/pdf/2002.05202v1.pdf
+    """
+
+    def __init__(
+        self,
+        size: int,
+    ):
+        super().__init__()
+        self.linear_gate = nn.Linear(size, size)
+        self.linear = nn.Linear(size, size)
+
+        self.beta = nn.Parameter(torch.ones(1))
+        self.register_parameter("beta", self.beta)
+
+    def forward(self, x) -> torch.Tensor:
+        """Forward pass of SwiGLU
+
+        Args:
+            x (torch.Tensor): input tensor
+
+        Returns:
+            torch.Tensor: output tensor
+        """
+        # calculate swish gate based on https://arxiv.org/pdf/2002.05202v1.pdf
+        swish_gate = self.linear_gate(x) * torch.sigmoid(
+            self.beta * self.linear_gate(x)
+        )
+        out = swish_gate * self.linear(x)
+        return out
 
 
 class TinyModel(nn.Module):
@@ -291,11 +325,13 @@ class TinyModel(nn.Module):
         # RoPE attention
         self.rope_attention = RoPEAttention_wMask(config)
 
-        # simple Model: linear layer with relu activation
+        # linear layer with swiglu activation
         self.linear = nn.Sequential(
             nn.Linear(config["d_model"], config["d_model"]),
-            nn.ReLU(),
+            SwiGLU(config["d_model"]),
         )
+
+        # simple linear layer as last layer
         self.last_linear = nn.Linear(config["d_model"], config["vocab_size"])
 
         logger.info(f"model params: {sum([m.numel() for m in self.parameters()])}")
