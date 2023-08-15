@@ -184,6 +184,26 @@ def evaluate_loss(model: nn.Module, dataset: torch.Tensor, config: dict) -> dict
     return output
 
 
+class RMSNorm(nn.Module):
+    def __init__(self, layer_shape, eps=1e-8, bias=False):
+        super(RMSNorm, self).__init__()
+        self.register_parameter("scale", nn.Parameter(torch.ones(layer_shape)))
+
+    def forward(self, x):
+        """Forward pass of RMSNorm
+
+        Args:
+            x (torch.Tensor): input tensor
+
+        Returns:
+            torch.Tensor: normalized tensor
+        """
+        # frob norm is not the same as RMS. RMS = 1/sqrt(n) * frob norm
+        ff_rms = torch.linalg.norm(x, dim=(1, 2)) * x[0].numel() ** -0.5
+        raw = x / ff_rms.unsqueeze(-1).unsqueeze(-1)
+        return self.scale[: x.shape[1], :].unsqueeze(0) * raw  # type: ignore
+
+
 class SimpleModel(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -191,6 +211,7 @@ class SimpleModel(nn.Module):
 
         # number of embeddings based on vocab size
         self.embedding = nn.Embedding(config["vocab_size"], config["d_model"])
+        self.rms = RMSNorm((config["context_window"], config["d_model"]))
         # simple Model: linear layer with relu activation
         self.linear = nn.Sequential(
             nn.Linear(config["d_model"], config["d_model"]),
@@ -210,8 +231,11 @@ class SimpleModel(nn.Module):
         Returns:
             tuple: tuple of (logits, loss) if targets is not None else tuple of logits
         """
-        # get embeddings and pass through linear layer
+        # get embeddings
         x = self.embedding(idx)
+        # rms pre-normalization
+        x = self.rms(x)
+        # pass through linear layer
         logits = self.linear(x)
 
         # calculate loss if targets is not None
