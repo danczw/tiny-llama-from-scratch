@@ -204,20 +204,99 @@ class RMSNorm(nn.Module):
         return self.scale[: x.shape[1], :].unsqueeze(0) * raw  # type: ignore
 
 
-class SimpleModel(nn.Module):
+class RoPEAttention_wMask(nn.Module):
+    def __init__(self, config: dict):
+        super().__init__()
+        self.config = config
+        self.w_q = nn.Linear(config["d_model"], config["d_model"], bias=False)
+        self.w_k = nn.Linear(config["d_model"], config["d_model"], bias=False)
+        self.w_v = nn.Linear(config["d_model"], config["d_model"], bias=False)
+
+        self.multihead = nn.MultiheadAttention(
+            config["d_model"], config["num_heads"], dropout=0.1, batch_first=True
+        )
+        self.R = self.get_rotary_matrix(config["context_window"], config["d_model"])
+
+    def get_rotary_matrix(
+        self, context_window: int, embedding_dim: int
+    ) -> torch.Tensor:
+        """Get rotary matrix
+
+        Args:
+            context_window (int): context window size
+            embedding_dim (int): embedding dimension
+
+        Returns:
+            torch.Tensor: rotary matrix
+        """
+        # init rotation matrix
+        R = torch.zeros(
+            (context_window, embedding_dim, embedding_dim), requires_grad=False
+        )
+        # get rotation matrix for each position
+        for pos in range(context_window):
+            for i in range(embedding_dim // 2):
+                # calc rotation angle
+                theta = 10000.0 ** (-2.0 * (i - 1) / embedding_dim)
+                m_theta = pos * theta
+                # calc position in rotation matrix
+                R[pos, 2 * i, 2 * i] = np.cos(m_theta)
+                R[pos, 2 * i, 2 * i + 1] = -np.sin(m_theta)
+                R[pos, 2 * i + 1, 2 * i] = np.sin(m_theta)
+                R[pos, 2 * i + 1, 2 * i + 1] = np.cos(m_theta)
+        return R
+
+    def forward(self, x: torch.Tensor) -> tuple:
+        """Forward pass of RoPEAttention
+
+        Args:
+            x (torch.Tensor): input tensor
+
+        Returns:
+            tuple: tuple of (activations, attention weights)
+        """
+        b, m, d = x.shape
+
+        # get queries, keys, values
+        q = self.w_q(x)
+        k = self.w_k(x)
+        v = self.w_v(x)
+
+        # add rotary embedding to queries and keys
+        q_out = (torch.bmm(q.transpose(0, 1), self.R[:m, ...])).transpose(0, 1)
+        k_out = (torch.bmm(k.transpose(0, 1), self.R[:m, ...])).transpose(0, 1)
+        v_out = (torch.bmm(v.transpose(0, 1), self.R[:m, ...])).transpose(0, 1)
+
+        # pass through multihead attention to get attention weights and activations
+        activation, attn_weights = self.multihead(
+            q_out,
+            k_out,
+            v_out,
+            attn_mask=nn.Transformer.generate_square_subsequent_mask(m),
+            is_causal=True,
+        )
+
+        return activation
+
+
+class TinyModel(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
 
-        # number of embeddings based on vocab size
+        # embedding layer
         self.embedding = nn.Embedding(config["vocab_size"], config["d_model"])
+        # RMS normalization
         self.rms = RMSNorm((config["context_window"], config["d_model"]))
+        # RoPE attention
+        self.rope_attention = RoPEAttention_wMask(config)
+
         # simple Model: linear layer with relu activation
         self.linear = nn.Sequential(
             nn.Linear(config["d_model"], config["d_model"]),
             nn.ReLU(),
-            nn.Linear(config["d_model"], config["vocab_size"]),
         )
+        self.last_linear = nn.Linear(config["d_model"], config["vocab_size"])
 
         logger.info(f"model params: {sum([m.numel() for m in self.parameters()])}")
 
@@ -233,10 +312,16 @@ class SimpleModel(nn.Module):
         """
         # get embeddings
         x = self.embedding(idx)
-        # rms pre-normalization
-        x = self.rms(x)
-        # pass through linear layer
-        logits = self.linear(x)
+
+        # one block of attention
+        x = self.rms(x)  # rms pre-normalization
+        x = x + self.rope_attention(x)
+
+        x = self.rms(x)  # rms pre-normalization
+        x = x + self.linear(x)
+
+        # get logits
+        logits = self.last_linear(x)
 
         # calculate loss if targets is not None
         if targets is not None:
@@ -373,7 +458,7 @@ def main():
     )
 
     # create model and optimizer
-    model = SimpleModel(config=config)
+    model = TinyModel(config=config)
     optimizer = torch.optim.Adam(model.parameters())
 
     # train model
