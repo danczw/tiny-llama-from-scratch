@@ -12,7 +12,7 @@ from torch.nn import functional as F
 
 # setup logging
 log_file_path = "./log/tiny.log"
-formatter = logging.Formatter("%(asctime)s - %(name)s: %(message)s")
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s: %(message)s")
 logger = logging.getLogger("tinyLLaMa")
 logger.setLevel(logging.DEBUG)
 
@@ -471,7 +471,7 @@ def train(
 
 
 def generate(
-    model: nn.Module, config: dict, ind_char_map: dict, max_new_tokens: int = 50
+    model: nn.Module, config: dict, ind_char_map: dict, max_new_tokens: int = 250
 ) -> list:
     """Generate new text
 

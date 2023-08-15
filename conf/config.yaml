@@ -1,12 +1,14 @@
 data_file_path: ./data/input.txt
 output_path: ./data/
 
+# train parameters
 train_size: 0.8 # train data size, eval and test size will be (1 - train_size) / 2 each
 batch_size: 32 # batch size
-epochs: 5000 # number of epochs to train
+epochs: 10000 # number of epochs to train
+log_interval: 100 # interval to log training stats
 
+# model parameters
 context_window: 16 # context window size
-log_interval: 50 # interval to log training stats
 d_model: 128 # model dimension
 num_heads: 8 # number of heads in multi-head attention
 num_layers: 4 # number of layers in transformer
